@@ -46,4 +46,4 @@ Below is the physical validation of the manufactured and populated PSU PCB assem
 ## 📁 Repository Navigation Guide
 
 * `/hardware`: Contains the complete source schematic (`.kicad_sch`) and multi-layer board layout files (`.kicad_pcb`).
-* `/assets`: High-resolution photographs, hardware layout visuals, and documentation figures.
+* `/assets`: High-resolution photographs.
