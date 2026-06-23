@@ -40,7 +40,6 @@ The PCB layout utilizes broad power planes and deliberate copper pours to handle
 Below is the physical validation of the manufactured and populated PSU PCB assembly:
 
 ![Custom PSU Hardware Assembly](assets/board_photo.jpg)
-![Custom PSU Hardware Assembly](assets/closeup.jpg)
 
 ---
 
