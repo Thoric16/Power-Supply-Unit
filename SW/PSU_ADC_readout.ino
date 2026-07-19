@@ -30,7 +30,7 @@ WiFiServer tcpServer(TCP_PORT);
 // UDP Multicast
 WiFiUDP udp;
 IPAddress multicastIP(239, 192, 1, 100);
-const uint16_t UDP_PORT = 49151;
+const uint16_t UDP_PORT = 49150;
 const unsigned long TELEMETRY_INTERVAL_MS = 100; // 10 Hz
 unsigned long lastTelemetryTime = 0;
 
@@ -53,7 +53,7 @@ const int I2C_SCL = 3;
 const uint8_t ADS7828_ADDR = 0x48;
 
 // Výpočetné konštanty
-const float V_REF = 3.3;             
+const float V_REF = 2.5;             
 const float ACS_OFFSET = 2.5;        
 const float ACS_SENSITIVITY = 0.066; // 30A verzia: 66 mV/A
 const float BATTERY_V_MIN = 3.5*11; 
@@ -79,7 +79,7 @@ TelemetryPacket telemetryData;
 uint16_t readADS7828(uint8_t channel) {
   if (channel > 7) return 0;
   const uint8_t ch_map[8] = {0x00, 0x40, 0x10, 0x50, 0x20, 0x60, 0x30, 0x70};
-  uint8_t cmd = 0x80 | ch_map[channel];
+  uint8_t cmd = 0x8C | ch_map[channel];
 
   Wire1.beginTransmission(ADS7828_ADDR);
   Wire1.write(cmd);
@@ -107,6 +107,7 @@ void setup() {
   for (int i = 0; i < 8; i++) {
     pinMode(socketPins[i], OUTPUT);
     digitalWrite(socketPins[i], HIGH);
+    delay(200);
   }
 
   // 2. Inicializácia I2C (Wire1)
@@ -131,15 +132,15 @@ void setup() {
     Serial.print("Pripojovanie k DHCP...");
     unsigned long startDHCP = millis();
     
-    // Čakáme max 5 sekúnd na DHCP, aby to neblokovalo bez kábla
-    while (eth.localIP() == IPAddress(0,0,0,0) && (millis() - startDHCP < 5000)) {
+    // Čakáme max 10 sekúnd na DHCP, aby to neblokovalo bez kábla
+    while (eth.localIP() == IPAddress(0,0,0,0) && (millis() - startDHCP < 10000)) {
       delay(500);
       Serial.print(".");
     }
     
     if (eth.localIP() == IPAddress(0,0,0,0)) {
       Serial.println("\n-> DHCP timeout! Pouzivam staticku IP.");
-      eth.config(staticIP, IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
+      eth.config(staticIP, IPAddress(172, 16, 10, 20), IPAddress(255, 255, 255, 0));
     } else {
       Serial.println("\n-> DHCP uspesne.");
     }
@@ -280,13 +281,13 @@ void updateAndSendTelemetry() {
   uint16_t raw_v_1_5 = readADS7828(5);
   float v_adc_1_5 = (raw_v_1_5 / 4095.0) * V_REF;
   telemetryData.voltage_cells_1_5 = v_adc_1_5 * ((220.0 + 10.0) / 10.0);
-  Serial.print("  raw_v_1_5: "); Serial.println(raw_v_1_5);
+  //Serial.print("  raw_v_1_5: "); Serial.println(raw_v_1_5);
 
   // Napätie 6-8 (ADC 6)
   uint16_t raw_v_6_8 = readADS7828(6);
   float v_adc_6_8 = (raw_v_6_8 / 4095.0) * V_REF;
   telemetryData.voltage_cells_6_8 = v_adc_6_8 * ((47.0 + 10.0) / 10.0);
-  Serial.print("  raw_v_6_8: "); Serial.println(raw_v_6_8);
+  //Serial.print("  raw_v_6_8: "); Serial.println(raw_v_6_8);
 
   // State of Charge (SOC)
   float soc = (telemetryData.voltage_cells_1_5 - BATTERY_V_MIN) / (BATTERY_V_MAX - BATTERY_V_MIN);
