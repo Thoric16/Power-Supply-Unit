@@ -69,6 +69,7 @@ struct __attribute__((packed)) TelemetryPacket {
   float voltage_cells_6_8;
   float current;
   float state_of_charge;
+  uint8_t rover_armed; // PRIDANE: 0=disarmed, 1=armed (1 Byte)
 };
 
 TelemetryPacket telemetryData;
@@ -101,14 +102,37 @@ void setup() {
   Serial.begin(115200);
   delay(2000); 
   Serial.println("\n--- PICO-PSU V2 STARTING ---");
+  
+  // Inicializacia telemetrie
+  telemetryData.rover_armed = 1; // PRIDANE: Vychodzi stav disarmed
 
   // 1. Inicializácia Socketov
   Serial.println("Inicializujem sockety (GP11-GP4)...");
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 7; i++) {
     pinMode(socketPins[i], OUTPUT);
     digitalWrite(socketPins[i], HIGH);
     delay(200);
   }
+  int pin = socketPins[7];
+  pinMode(pin, OUTPUT);
+
+  int steps = 5000;           // 100 steps over 1 second
+  int periodMicros = 1000;  // 10 ms total per cycle (100 Hz refresh rate)
+
+  for (int step = 0; step < steps; step++) {
+    // Calculate ON time proportionally (0 µs up to 10,000 µs)
+    int highTime = map(step, 0, steps, 0, periodMicros);
+    int lowTime  = periodMicros - highTime;
+
+    digitalWrite(pin, HIGH);
+    delayMicroseconds(highTime);
+    
+    digitalWrite(pin, LOW);
+    delayMicroseconds(lowTime);
+  }
+
+  // Lock it HIGH at full power after the ramp finishes
+  digitalWrite(pin, HIGH);
 
   // 2. Inicializácia I2C (Wire1)
   Serial.println("Inicializujem I2C pre ADS7828 na Wire1...");
@@ -234,7 +258,20 @@ void handleTCP() {
         Serial.print("[TCP] -> Akcia: ");
         Serial.print((cmd == 0x01) ? "ZAPNUTY" : "VYPNUTY");
         Serial.print(" Socket "); Serial.println(arg + 1); 
-      } else {
+      } 
+      // PRIDANE: ROVER_ARM
+      else if (cmd == 0x03 && arg == 0) {
+        telemetryData.rover_armed = 1;
+        resp = (cmd << 4) | (arg + 8); // OK response
+        Serial.println("[TCP] -> Akcia: ROVER_ARM");
+      }
+      // PRIDANE: ROVER_DISARM
+      else if (cmd == 0x04 && arg == 0) {
+        telemetryData.rover_armed = 0;
+        resp = (cmd << 4) | (arg + 8); // OK response
+        Serial.println("[TCP] -> Akcia: ROVER_DISARM");
+      } 
+      else {
         resp = (cmd << 4) | 0; // FAIL response
         Serial.println("[TCP] -> Akcia ZAMIETNUTA");
       }
@@ -273,21 +310,19 @@ void updateAndSendTelemetry() {
   
   if (abs(current_6_8) < 0.1) current_6_8 = 0.0;
   telemetryData.current_cells_6_8 = current_6_8;
-  total_current += current_6_8;
+  total_current += 0.31*current_6_8;
 
   telemetryData.current = total_current;
 
   // Napätie 1-5 (ADC 5)
   uint16_t raw_v_1_5 = readADS7828(5);
   float v_adc_1_5 = (raw_v_1_5 / 4095.0) * V_REF;
-  telemetryData.voltage_cells_1_5 = v_adc_1_5 * ((220.0 + 10.0) / 10.0);
-  //Serial.print("  raw_v_1_5: "); Serial.println(raw_v_1_5);
+  telemetryData.voltage_cells_1_5 = v_adc_1_5 * (((220.0 + 10.0) / 10.0));
 
   // Napätie 6-8 (ADC 6)
   uint16_t raw_v_6_8 = readADS7828(6);
   float v_adc_6_8 = (raw_v_6_8 / 4095.0) * V_REF;
-  telemetryData.voltage_cells_6_8 = v_adc_6_8 * ((47.0 + 10.0) / 10.0);
-  //Serial.print("  raw_v_6_8: "); Serial.println(raw_v_6_8);
+  telemetryData.voltage_cells_6_8 = v_adc_6_8 * (((47.0 + 10.0) / 10.0));
 
   // State of Charge (SOC)
   float soc = (telemetryData.voltage_cells_1_5 - BATTERY_V_MIN) / (BATTERY_V_MAX - BATTERY_V_MIN);
@@ -318,5 +353,6 @@ void updateAndSendTelemetry() {
     Serial.print("  Napatie 1-5 [V]: "); Serial.println(telemetryData.voltage_cells_1_5, 2);
     Serial.print("  Napatie 6-8 [V]: "); Serial.println(telemetryData.voltage_cells_6_8, 2);
     Serial.print("  SOC        [%]: "); Serial.println(telemetryData.state_of_charge * 100.0, 1);
+    Serial.print("  Rover Armed  : "); Serial.println(telemetryData.rover_armed); // PRIDANE
   }
 }
