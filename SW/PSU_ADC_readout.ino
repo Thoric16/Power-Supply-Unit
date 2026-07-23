@@ -286,6 +286,21 @@ void handleTCP() {
 // SPRACOVANIE A ODOSLANIE TELEMETRIE
 // ==========================================
 void updateAndSendTelemetry() {
+
+  // Detekcia stavu disarm pomocou interneho Pico ADC2 (GP28)
+  int raw_adc2_pico = analogRead(28);
+  // Arduino core pre Pico ma default 10-bit (0-1023) a 3.3V referenciu
+  float v_gate = (raw_adc2_pico / 1023.0) * 3.3; 
+
+  if (v_gate < 0.1) {
+    telemetryData.rover_armed = 0; // Software disarm (~0.0V)
+  } else if (v_gate >= 0.1 && v_gate < 0.5) {
+    telemetryData.rover_armed = 2; // Physical E-Stop (~0.2V)
+  } else {
+    telemetryData.rover_armed = 1; // Armed (~3.3V)
+  }
+
+
   float total_current = 0.0;
 
   // Prúd články 1-5 (ADC 0-4)
@@ -353,6 +368,9 @@ void updateAndSendTelemetry() {
     Serial.print("  Napatie 1-5 [V]: "); Serial.println(telemetryData.voltage_cells_1_5, 2);
     Serial.print("  Napatie 6-8 [V]: "); Serial.println(telemetryData.voltage_cells_6_8, 2);
     Serial.print("  SOC        [%]: "); Serial.println(telemetryData.state_of_charge * 100.0, 1);
-    Serial.print("  Rover Armed  : "); Serial.println(telemetryData.rover_armed); // PRIDANE
+    Serial.print("  Rover Armed  : "); 
+    if (telemetryData.rover_armed == 1) Serial.println("1 (ARMED)");
+    else if (telemetryData.rover_armed == 2) Serial.println("2 (PHYSICAL E-STOP)");
+    else Serial.println("0 (SOFTWARE DISARM)");
   }
 }
